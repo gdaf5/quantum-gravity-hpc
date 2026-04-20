@@ -237,9 +237,6 @@ Contributions are welcome! Please:
 
 ---
 
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
@@ -255,8 +252,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 📞 Contact
 
 For questions or collaboration:
-- Open an issue on GitHub
-- Email: your.email@example.com
+- Email: wosky021@gmail.com
 
 ---
 
