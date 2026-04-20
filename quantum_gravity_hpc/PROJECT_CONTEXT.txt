@@ -1,0 +1,25 @@
+# Project Context: HPC Quantum Gravity Simulation
+
+## Overview
+This project implements a high-performance, self-consistent quantum gravity simulation based on N-body dynamics. It simulates the interaction of particles within a spacetime manifold where the metric is dynamically updated based on the local energy density of the particles (Back-reaction).
+
+## Core Architecture (Precision Edition)
+- **Engine (`engine.py`):** Uses differentiable physics (SPH/PIC approach) to calculate spacetime metrics and Christoffel symbols.
+  - **Differentiable Manifold:** Instead of discrete grid indexing, uses an analytical/interpolated approach that allows `torch.autograd` (via `jacrev`) to compute accurate gravitational gradients.
+  - **Metric Construction:** $g_{\mu\nu}$ is constructed dynamically as a functional of particle density (`rho_local`).
+  - **Verlet Integration:** Implements a symplectic Velocity Verlet integrator to preserve the system's Hamiltonian and ensure long-term stability.
+  - **Vectorization:** Heavily optimized using `torch.func.vmap` for parallel particle processing, avoiding heavy Python loops.
+
+- **Main (`main.py`):** Entry point. Manages the simulation loop, computes density maps (PIC), and triggers the vectorized engine.
+
+- **Logging (`logger.py`):** Optimized HDF5 writer. Keeps the HDF5 file open during the simulation for high-throughput data persistence, using `gzip` compression.
+
+- **Analysis (`analyze.py`):** Automated tool to parse `simulation_results.h5` and generate diagnostic plots (e.g., cluster radius evolution).
+
+## Technical Specifications
+- **Framework:** PyTorch (v2+)
+- **Precision:** `float64` (double precision) required for physical stability on Planck-scale metrics.
+- **Computation:** Designed for CPU-vectorized execution, easily portable to CUDA/GPU (`.to('cuda')`).
+
+## Scientific Context
+The model explores the self-consistent evolution of a particle cluster in a quantum-fluctuating spacetime. It aims to investigate gravitational potential well formation and filament structure emergence, moving beyond static background models into non-linear field theory.
