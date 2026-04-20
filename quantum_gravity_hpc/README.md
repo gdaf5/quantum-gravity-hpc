@@ -1,234 +1,115 @@
 # Quantum Gravity HPC Simulation
 
-Высокопроизводительная симуляция квантовой гравитации на планковском масштабе для докторской диссертации.
+High-performance simulation of quantum gravity at Planck scale.
 
-## Тема исследования
+## Overview
 
-**"Стохастическая динамика квантово-метрических флуктуаций в неевклидовых 4D-континуумах: моделирование виртуальных сингулярностей и нелокальных состояний"**
+Numerical simulation of quantum-metric fluctuations in 4D spacetime, modeling virtual singularities and non-local quantum states.
 
-## Структура проекта
+## Quick Start
 
-```
-quantum_gravity_hpc/
-├── engine.py                  # Дифференцируемый движок с символами Кристоффеля
-├── main.py                    # Базовая HPC симуляция
-├── logger.py                  # Эффективное логирование в HDF5
-├── analyze.py                 # Простой анализ результатов
-├── advanced_analysis.py       # Продвинутый анализ с метриками
-├── ensemble_simulator.py      # Ансамблевая симуляция + обратное влияние
-├── PROJECT_CONTEXT.txt        # Техническая документация
-└── README.md                  # Этот файл
-```
-
-## Установка зависимостей
+### Installation
 
 ```bash
 pip install torch numpy h5py matplotlib scipy
 ```
 
-Для GPU ускорения:
+For GPU acceleration:
 ```bash
 pip install torch --index-url https://download.pytorch.org/whl/cu118
 ```
 
-## Использование
-
-### 1. Базовая симуляция (5 шагов, 100 частиц)
+### Basic Usage
 
 ```bash
+# Run basic simulation (100 particles, 5 steps)
 python main.py
-```
 
-Результат: `cluster_experiment.h5`
-
-### 2. Ансамблевая симуляция (анализ квантовой диффузии)
-
-```bash
-# Простая ансамблевая симуляция
+# Run ensemble simulation (1000 particles, 100 steps)
 python ensemble_simulator.py ensemble
 
-# С обратным влиянием (back-reaction)
-python ensemble_simulator.py backreaction
-
-# Сравнение обоих режимов
-python ensemble_simulator.py compare
-```
-
-Результаты:
-- `ensemble_results.h5` - траектории частиц
-- `backreaction_results.h5` - с учетом влияния на метрику
-- `backreaction_comparison.png` - график сравнения
-
-### 3. Анализ результатов
-
-#### Простой анализ
-```bash
-python analyze.py
-```
-
-Создает:
-- `cluster_evolution.png` - эволюция радиуса кластера
-- `final_distribution.png` - финальное распределение частиц
-
-#### Продвинутый анализ
-```bash
+# Analyze results
 python advanced_analysis.py cluster_experiment.h5
 ```
 
-Создает папку `analysis_results/` с:
-- `cluster_evolution.png` - эволюция радиуса с дисперсией
-- `velocity_dispersion.png` - квантовая диффузия импульса
-- `fractal_dimension.png` - фрактальная размерность D2
-- `energy_conservation.png` - проверка сохранения энергии
-- `phase_space_volume.png` - эволюция фазового объема
-- `lyapunov_exponent.png` - показатель Ляпунова (хаотичность)
-- `final_distribution.png` - 3D проекции финального распределения
-- `analysis_report.json` - JSON отчет со всеми метриками
+## Project Structure
 
-## Ключевые метрики для диссертации
-
-### 1. Фрактальная размерность (D2)
-Показывает степень "размытия" волнового пакета в квантовой пене:
-- D2 ≈ 3.0 - классическое поведение
-- D2 > 3.0 - нелокальные квантовые эффекты
-- D2 < 3.0 - коллапс в нижнюю размерность
-
-### 2. Показатель Ляпунова (λ)
-Мера экспоненциального расхождения траекторий:
-- λ > 0 - хаотическая динамика
-- λ ≈ 0 - регулярное движение
-- λ < 0 - сходящиеся траектории
-
-### 3. Коэффициент квантовой диффузии
-Рост дисперсии скоростей:
 ```
-D_quantum = σ²(v_final) / σ²(v_initial)
+quantum_gravity_hpc/
+├── engine.py                      # Differentiable engine with Christoffel symbols
+├── main.py                        # Basic HPC simulation
+├── ensemble_simulator.py          # Ensemble simulation + back-reaction
+├── advanced_analysis.py           # Advanced analysis with metrics
+├── adm_metric_evolution.py        # ADM formalism implementation
+├── quantum_entanglement_geometry.py  # Entanglement entropy analysis
+├── quantum_thermodynamics.py      # Thermodynamic properties
+├── self_consistent_gravity.py     # Self-consistent gravity solver
+├── theoretical_comparison.py      # Comparison with theoretical models
+└── run_all_experiments.py         # Run complete experiment suite
 ```
 
-### 4. Поправка к сечению взаимодействия (для ADS)
-```
-Δσ/σ₀ = α · (D2 - 3.0) · (E/E_Planck)²
-```
+## Key Features
 
-## Физические параметры
+### Physics Implementation
 
-- **Планковская длина**: l_P = 1.616 × 10⁻³⁵ м
-- **Планковское время**: t_P = 5.39 × 10⁻⁴⁴ с
-- **Шаг интегрирования**: dt = 10⁻⁴⁵ с (0.1 t_P)
-- **Размер сетки**: 8×8×8×8 (4096 ячеек)
-- **Амплитуда флуктуаций**: 0.05 (5% от метрики Минковского)
+- **Geodesic integration** in stochastic spacetime using Velocity Verlet
+- **Christoffel symbols** computed via automatic differentiation
+- **Back-reaction effects** through simplified Einstein equations
+- **ADM formalism** for metric evolution
+- **Quantum entanglement** geometry analysis
 
-## Архитектура симуляции
+### Analysis Metrics
 
-### Дифференцируемый движок (engine.py)
+1. **Fractal Dimension (D2)**: Measures non-local quantum effects
+   - D2 ≈ 3.0: classical behavior
+   - D2 > 3.0: non-local quantum effects
+   
+2. **Lyapunov Exponent (λ)**: Chaotic dynamics indicator
+   - λ > 0: chaotic dynamics
+   - λ ≈ 0: regular motion
 
-Использует `torch.func.jacrev` для автоматического вычисления символов Кристоффеля:
+3. **Quantum Diffusion**: Velocity dispersion growth
+4. **Energy Conservation**: Numerical stability check
+5. **Phase Space Volume**: Liouville theorem verification
 
-```python
-Γ^σ_{μν} = ½ g^{σρ} (∂_μ g_{ρν} + ∂_ν g_{ρμ} - ∂_ρ g_{μν})
-```
+## Simulation Modes
 
-### Интегратор
+| Mode | Particles | Steps | Back-reaction | Time (CPU) |
+|------|-----------|-------|---------------|------------|
+| Basic | 100 | 5 | No | ~1 sec |
+| Ensemble | 1000 | 100 | No | ~30 sec |
+| Back-reaction | 500 | 50 | Yes | ~60 sec |
 
-Velocity Verlet (симплектический):
-```python
-v_{n+1/2} = v_n + a_n · dt/2
-x_{n+1} = x_n + v_{n+1/2} · dt
-a_{n+1} = compute_acceleration(x_{n+1})
-v_{n+1} = v_{n+1/2} + a_{n+1} · dt/2
-```
+## Physical Parameters
 
-### Обратное влияние (Back-reaction)
+- **Planck length**: l_P = 1.616 × 10⁻³⁵ m
+- **Planck time**: t_P = 5.39 × 10⁻⁴⁴ s
+- **Integration step**: dt = 10⁻⁴⁵ s (0.1 t_P)
+- **Grid size**: 8×8×8×8 (4096 cells)
+- **Fluctuation amplitude**: 0.05 (5% of Minkowski metric)
 
-Упрощенное уравнение Эйнштейна:
-```python
-δg_μν = α · T_μν
-```
-
-где T_μν - тензор энергии-импульса частиц (PIC метод).
-
-## Сравнение режимов
-
-| Режим | Частицы | Шаги | Обратное влияние | Время (~CPU) |
-|-------|---------|------|------------------|--------------|
-| Базовый | 100 | 5 | Нет | ~1 сек |
-| Ансамбль | 1000 | 100 | Нет | ~30 сек |
-| Back-reaction | 500 | 50 | Да | ~60 сек |
-| Сравнение | 500×2 | 50 | Оба | ~120 сек |
-
-## Результаты текущей симуляции
-
-Из `cluster_experiment.h5`:
-- **Шагов**: 5
-- **Частиц**: 100
-- **Фрактальная размерность**: D2 = 5.752
-- **Показатель Ляпунова**: λ = 0.0000
-- **Дрейф энергии**: 0.00%
-
-**Интерпретация**: Высокая фрактальная размерность (5.752 >> 3) указывает на сильные нелокальные эффекты в квантовой пене. Нулевой показатель Ляпунова говорит о регулярной динамике (короткая симуляция).
-
-## Рекомендации для диссертации
-
-### Для получения статистически значимых результатов:
-
-1. **Увеличить количество шагов**: 100-500 для наблюдения долговременной эволюции
-2. **Запустить ансамбль**: 1000+ частиц для усреднения квантовых флуктуаций
-3. **Сравнить с/без back-reaction**: показать влияние обратной связи
-4. **Варьировать амплитуду флуктуаций**: построить зависимость D2(amplitude)
-5. **Исследовать энергетическую зависимость**: D2(E) для разных начальных энергий
-
-### Команды для полного анализа:
+## Advanced Experiments
 
 ```bash
-# 1. Ансамблевая симуляция (1000 частиц, 100 шагов)
+# Run all experiments
+python run_all_experiments.py
+
+# Individual experiments
 python ensemble_simulator.py ensemble
-
-# 2. Продвинутый анализ
-python advanced_analysis.py ensemble_results.h5
-
-# 3. Симуляция с обратным влиянием
 python ensemble_simulator.py backreaction
-
-# 4. Анализ с обратным влиянием
-python advanced_analysis.py backreaction_results.h5
-
-# 5. Сравнение
 python ensemble_simulator.py compare
+
+# Theoretical comparisons
+python theoretical_comparison.py
+python quantum_thermodynamics.py
 ```
 
-## Визуализация в реальном времени (будущее расширение)
+## Output Files
 
-Для мониторинга через TensorBoard (из теоретической части):
+- `*.h5` - Simulation data (HDF5 format)
+- `analysis_results/*.png` - Visualization plots
+- `analysis_report.json` - Numerical metrics
 
-```bash
-# Установка
-pip install tensorboard
+## License
 
-# Запуск (когда будет реализовано)
-python quantum_foam_simulator.py
-
-# Просмотр
-tensorboard --logdir=runs/quantum_foam
-```
-
-## Публикации и цитирование
-
-Этот код реализует численную модель для исследования:
-- Квантовых флуктуаций метрики на планковском масштабе
-- Геодезической динамики в стохастическом пространстве-времени
-- Эффектов обратного влияния материи на геометрию
-- Нелокальных корреляций через фрактальный анализ
-
-## Контакты и поддержка
-
-Для вопросов по реализации или интерпретации результатов обращайтесь к научному руководителю.
-
-## Лицензия
-
-Академическое использование. Для публикаций требуется согласование.
-
----
-
-**Последнее обновление**: 2026-04-20
-**Версия**: 1.0
-**Статус**: Готово к расширенным симуляциям
+Academic use. For publications, coordination required.
