@@ -98,6 +98,14 @@ class MetricField:
         
         return g_interp
     
+    def interpolate_metric(self, coords: torch.Tensor) -> torch.Tensor:
+        """Single particle version - wraps batch version"""
+        if coords.dim() == 1:
+            coords = coords.unsqueeze(0)
+            result = self.interpolate_metric_batch(coords)
+            return result.squeeze(0)
+        return self.interpolate_metric_batch(coords)
+    
     def compute_metric_derivatives_batch(self, coords: torch.Tensor, h: float = 1e-3) -> torch.Tensor:
         """
         Compute ∂_μ g_νρ for batch of particles using finite differences.
@@ -189,6 +197,55 @@ def compute_christoffel_symbols_batch(g: torch.Tensor, dg: torch.Tensor) -> torc
     return 0.5 * combined
 
 
+# Alias for backward compatibility
+def compute_christoffel_symbols(g: torch.Tensor, dg: torch.Tensor) -> torch.Tensor:
+    """Single particle version - wraps batch version"""
+    if g.dim() == 2:
+        g = g.unsqueeze(0)
+        dg = dg.unsqueeze(0)
+        result = compute_christoffel_symbols_batch(g, dg)
+        return result.squeeze(0)
+    return compute_christoffel_symbols_batch(g, dg)
+    """
+    Compute Christoffel symbols for batch of particles.
+    
+    Γ^σ_{μν} = ½ g^{σρ} (∂_μ g_{ρν} + ∂_ν g_{ρμ} - ∂_ρ g_{μν})
+    
+    Args:
+        g: [N, 4, 4] metric tensors
+        dg: [N, 4, 4, 4] metric derivatives
+    Returns:
+        Gamma: [N, 4, 4, 4] Christoffel symbols
+    """
+    # Use C++ backend if available (fastest)
+    if CPP_AVAILABLE:
+        g_np = g.cpu().numpy()
+        dg_np = dg.cpu().numpy()
+        Gamma_np = geodesic_cpp.compute_christoffel_batch(g_np, dg_np)
+        return torch.from_numpy(Gamma_np).to(g.device)
+    
+    # Use Numba if available (fast)
+    if NUMBA_AVAILABLE:
+        g_np = g.cpu().numpy()
+        dg_np = dg.cpu().numpy()
+        Gamma_np = _compute_christoffel_numba(g_np, dg_np)
+        return torch.from_numpy(Gamma_np).to(g.device)
+    
+    # Fallback to pure Python (slow)
+    N = g.shape[0]
+    g_inv = torch.linalg.inv(g)
+    combined = torch.zeros(N, 4, 4, 4, dtype=g.dtype, device=g.device)
+    
+    for sigma in range(4):
+        for mu in range(4):
+            for nu in range(4):
+                for rho in range(4):
+                    combined[:, sigma, mu, nu] += g_inv[:, sigma, rho] * \
+                        (dg[:, mu, rho, nu] + dg[:, nu, rho, mu] - dg[:, rho, mu, nu])
+    
+    return 0.5 * combined
+
+
 # Numba-accelerated geodesic acceleration
 if NUMBA_AVAILABLE:
     @njit(parallel=True, fastmath=True, cache=True)
@@ -204,6 +261,19 @@ if NUMBA_AVAILABLE:
                         accel[n, sigma] -= Gamma_np[n, sigma, mu, nu] * velocity_np[n, mu] * velocity_np[n, nu]
         
         return accel
+
+
+# Alias for backward compatibility
+def geodesic_acceleration(coords: torch.Tensor, 
+                         velocity: torch.Tensor,
+                         metric_field: MetricField) -> torch.Tensor:
+    """Single particle version"""
+    if coords.dim() == 1:
+        coords = coords.unsqueeze(0)
+        velocity = velocity.unsqueeze(0)
+        result = geodesic_acceleration_batch(coords, velocity, metric_field)
+        return result.squeeze(0)
+    return geodesic_acceleration_batch(coords, velocity, metric_field)
 
 
 def geodesic_acceleration_batch(coords: torch.Tensor, 
