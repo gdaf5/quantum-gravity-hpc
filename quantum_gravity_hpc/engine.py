@@ -238,9 +238,11 @@ def batch_geodesic_integration(particles: torch.Tensor,
     Returns:
         new_particles: [N, 8]
     """
-    # Note: vmap over particles, but metric_field is shared
-    # We need to wrap the function to fix metric_field and dt
-    def integrate_single(p):
-        return integrate_geodesic_single(p, metric_field, dt)
+    # Simple loop instead of vmap (vmap has issues with our metric field)
+    N = particles.shape[0]
+    new_particles = torch.zeros_like(particles)
     
-    return vmap(integrate_single)(particles)
+    for i in range(N):
+        new_particles[i] = integrate_geodesic_single(particles[i], metric_field, dt)
+    
+    return new_particles

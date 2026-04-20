@@ -1,0 +1,174 @@
+﻿C:\Users\User\AppData\Local\Programs\Python\Python313\python.exe : Traceback (most recent call last):
+строка:1 знак:130
++ ... -8')" 2>&1; C:\Users\User\AppData\Local\Programs\Python\Python313\pyt ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Traceback (most recent call last)::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  File "C:\Users\User\OneDrive\╨рсюўшщ ёЄюы\чрфєьър\quantum_gravity_hpc\test_physics.py", line 24, in test
+    print(f"[PASS] {name}")
+    ~~~~~^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1251.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2192' in position 24: character maps to <undefined>
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\OneDrive\╨рсюўшщ ёЄюы\чрфєьър\quantum_gravity_hpc\test_physics.py", line 322, in run_all_tests
+    all_passed &= test_engine()
+                  ~~~~~~~~~~~^^
+  File "C:\Users\User\OneDrive\╨рсюўшщ ёЄюы\чрфєьър\quantum_gravity_hpc\test_physics.py", line 68, in test_engine
+    runner.test("Minkowski metric \u2192 zero Christoffel symbols", test_minkowski_christoffel)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\OneDrive\╨рсюўшщ ёЄюы\чрфєьър\quantum_gravity_hpc\test_physics.py", line 28, in test
+    print(f"[FAIL] {name}")
+    ~~~~~^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1251.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2192' in position 24: character maps to <undefined>
+Traceback (most recent call last):
+  File "C:\Users\User\OneDrive\╨рсюўшщ ёЄюы\чрфєьър\quantum_gravity_hpc\test_physics.py", line 24, in test
+    print(f"[PASS] {name}")
+    ~~~~~^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1251.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2192' in position 18: character maps to <undefined>
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\OneDrive\╨рсюўшщ ёЄюы\чрфєьър\quantum_gravity_hpc\test_physics.py", line 329, in run_all_tests
+    all_passed &= test_einstein_solver()
+                  ~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\User\OneDrive\╨рсюўшщ ёЄюы\чрфєьър\quantum_gravity_hpc\test_physics.py", line 166, in test_einstein_so
+lver
+    runner.test("Flat space \u2192 zero Ricci tensor", test_flat_ricci)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\OneDrive\╨рсюўшщ ёЄюы\чрфєьър\quantum_gravity_hpc\test_physics.py", line 28, in test
+    print(f"[FAIL] {name}")
+    ~~~~~^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1251.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2192' in position 18: character maps to <undefined>
+Traceback (most recent call last):
+  File "C:\Users\User\OneDrive\╨рсюўшщ ёЄюы\чрфєьър\quantum_gravity_hpc\test_physics.py", line 24, in test
+    print(f"[PASS] {name}")
+    ~~~~~^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1251.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u03c0' in position 37: character maps to <undefined>
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\OneDrive\╨рсюўшщ ёЄюы\чрфєьър\quantum_gravity_hpc\test_physics.py", line 336, in run_all_tests
+    all_passed &= test_hawking_radiation()
+                  ~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\User\OneDrive\╨рсюўшщ ёЄюы\чрфєьър\quantum_gravity_hpc\test_physics.py", line 201, in test_hawking_rad
+iation
+    runner.test("Hawking temperature T_H = 1/(8\u03c0M)", test_hawking_temperature)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\OneDrive\╨рсюўшщ ёЄюы\чрфєьър\quantum_gravity_hpc\test_physics.py", line 28, in test
+    print(f"[FAIL] {name}")
+    ~~~~~^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1251.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u03c0' in position 37: character maps to <undefined>
+======================================================================
+QUANTUM GRAVITY UNIT TESTS
+======================================================================
+Testing all modules for correctness...
+
+======================================================================
+TESTING ENGINE.PY
+======================================================================
+
+[CRASH] ENGINE TESTS CRASHED: 'charmap' codec can't encode character '\u2192' in position 24: character maps to <undefined>
+
+======================================================================
+TESTING EINSTEIN_SOLVER.PY
+======================================================================
+Einstein Solver initialized: grid (4, 4, 4, 4)
+
+Solving Einstein equations...
+  Grid: (4, 4, 4, 4)
+  Max iterations: 5
+  Tolerance: 0.0001
+  Iteration 0: residual=0.000000e+00, max_correction=0.000000e+00
+[FAIL] Vacuum solution preserves Minkowski
+  Error: 'charmap' codec can't encode character '\u2713' in position 2: character maps to <undefined>
+Einstein Solver initialized: grid (4, 4, 4, 4)
+
+[CRASH] EINSTEIN SOLVER TESTS CRASHED: 'charmap' codec can't encode character '\u2192' in position 18: character maps to <undefined>
+
+======================================================================
+TESTING HAWKING_RADIATION.PY
+======================================================================
+Hawking Radiation Calculator initialized
+[PASS] Schwarzschild radius r_s = 2M
+
+[CRASH] HAWKING RADIATION TESTS CRASHED: 'charmap' codec can't encode character '\u03c0' in position 37: character maps to <undefined>
+
+======================================================================
+TESTING QUANTUM_FIELD.PY
+======================================================================
+[FAIL] Field initialization with vacuum fluctuations
+  Error: 'charmap' codec can't encode character '\u03c3' in position 23: character maps to <undefined>
+[FAIL] Vacuum expectation values
+  Error: 'charmap' codec can't encode character '\u03c3' in position 23: character maps to <undefined>
+
+======================================================================
+TEST SUMMARY: 0/2 passed
+======================================================================
+
+Failed tests:
+  - Field initialization with vacuum fluctuations: 'charmap' codec can't encode character '\u03c3' in position 23: character maps to <undefined>
+  - Vacuum expectation values: 'charmap' codec can't encode character '\u03c3' in position 23: character maps to <undefined>
+
+======================================================================
+TESTING TESTABLE_PREDICTIONS.PY
+======================================================================
+Testable Predictions Module initialized
+  LHC energy: 14000.0 GeV
+  Planck energy: 1.22e+19 GeV
+  Energy ratio: 1.15e-15
+
+======================================================================
+LHC PREDICTIONS
+======================================================================
+  Cross-section modification: 0.0000%
+  Mini-BH production: NO
+  Extra dimensions: 0
+  Missing energy: 0.000000%
+[FAIL] LHC predictions for classical case
+  Error: 'charmap' codec can't encode character '\u2717' in position 17: character maps to <undefined>
+
+======================================================================
+GRAVITATIONAL WAVE PREDICTIONS
+======================================================================
+  f = 10 Hz:
+    Dispersion: 3.384542e-42
+    Time delay: 3.868407e-42 s
+[FAIL] Gravitational wave dispersion predictions
+  Error: 'charmap' codec can't encode character '\u2717' in position 19: character maps to <undefined>
+
+======================================================================
+TEST SUMMARY: 0/2 passed
+======================================================================
+
+Failed tests:
+  - LHC predictions for classical case: 'charmap' codec can't encode character '\u2717' in position 17: character maps to <undefined>
+  - Gravitational wave dispersion predictions: 'charmap' codec can't encode character '\u2717' in position 19: character maps to <undefined>
+
+======================================================================
+[FAILED] SOME TESTS FAILED
+======================================================================
+
+Please review errors above.

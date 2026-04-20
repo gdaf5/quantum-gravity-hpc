@@ -21,11 +21,11 @@ class TestRunner:
         try:
             func()
             self.passed += 1
-            print(f"✓ {name}")
+            print(f"[PASS] {name}")
             self.tests.append((name, True, None))
         except Exception as e:
             self.failed += 1
-            print(f"✗ {name}")
+            print(f"[FAIL] {name}")
             print(f"  Error: {str(e)}")
             self.tests.append((name, False, str(e)))
     
@@ -321,45 +321,45 @@ def run_all_tests():
     try:
         all_passed &= test_engine()
     except Exception as e:
-        print(f"\n✗ ENGINE TESTS CRASHED: {e}")
+        print(f"\n[CRASH] ENGINE TESTS CRASHED: {e}")
         traceback.print_exc()
         all_passed = False
     
     try:
         all_passed &= test_einstein_solver()
     except Exception as e:
-        print(f"\n✗ EINSTEIN SOLVER TESTS CRASHED: {e}")
+        print(f"\n[CRASH] EINSTEIN SOLVER TESTS CRASHED: {e}")
         traceback.print_exc()
         all_passed = False
     
     try:
         all_passed &= test_hawking_radiation()
     except Exception as e:
-        print(f"\n✗ HAWKING RADIATION TESTS CRASHED: {e}")
+        print(f"\n[CRASH] HAWKING RADIATION TESTS CRASHED: {e}")
         traceback.print_exc()
         all_passed = False
     
     try:
         all_passed &= test_quantum_field()
     except Exception as e:
-        print(f"\n✗ QUANTUM FIELD TESTS CRASHED: {e}")
+        print(f"\n[CRASH] QUANTUM FIELD TESTS CRASHED: {e}")
         traceback.print_exc()
         all_passed = False
     
     try:
         all_passed &= test_testable_predictions()
     except Exception as e:
-        print(f"\n✗ TESTABLE PREDICTIONS TESTS CRASHED: {e}")
+        print(f"\n[CRASH] TESTABLE PREDICTIONS TESTS CRASHED: {e}")
         traceback.print_exc()
         all_passed = False
     
     print("\n" + "="*70)
     if all_passed:
-        print("✓ ALL TESTS PASSED")
+        print("[SUCCESS] ALL TESTS PASSED")
         print("="*70)
         print("\nCode is working correctly!")
     else:
-        print("✗ SOME TESTS FAILED")
+        print("[FAILED] SOME TESTS FAILED")
         print("="*70)
         print("\nPlease review errors above.")
     
