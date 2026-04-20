@@ -77,12 +77,12 @@ class MetricField:
         for dt in [0, 1]:
             for dx in [0, 1]:
                 for dy in [0, 1]:
-                    for dz in [0, 1]:
-                        # Indices for this corner
-                        it = torch.where(torch.tensor(dt == 1), i1[:, 0], i0[:, 0])
-                        ix = torch.where(torch.tensor(dx == 1), i1[:, 1], i0[:, 1])
-                        iy = torch.where(torch.tensor(dy == 1), i1[:, 2], i0[:, 2])
-                        iz = torch.where(torch.tensor(dz == 1), i1[:, 3], i0[:, 3])
+                        for dz in [0, 1]:
+                            # Indices for this corner
+                            it = i1[:, 0] if dt == 1 else i0[:, 0]
+                            ix = i1[:, 1] if dx == 1 else i0[:, 1]
+                            iy = i1[:, 2] if dy == 1 else i0[:, 2]
+                            iz = i1[:, 3] if dz == 1 else i0[:, 3]
                         
                         # Weights for this corner
                         wt = frac[:, 0] if dt == 1 else (1 - frac[:, 0])
@@ -158,7 +158,7 @@ if NUMBA_AVAILABLE:
 
 def compute_christoffel_symbols_batch(g: torch.Tensor, dg: torch.Tensor) -> torch.Tensor:
     """
-    Compute Christoffel symbols for batch of particles.
+    Compute Christoffel symbols for batch of particles with numerical stability.
     
     Γ^σ_{μν} = ½ g^{σρ} (∂_μ g_{ρν} + ∂_ν g_{ρμ} - ∂_ρ g_{μν})
     
@@ -182,9 +182,20 @@ def compute_christoffel_symbols_batch(g: torch.Tensor, dg: torch.Tensor) -> torc
         Gamma_np = _compute_christoffel_numba(g_np, dg_np)
         return torch.from_numpy(Gamma_np).to(g.device)
     
-    # Fallback to pure Python (slow)
+    # Fallback to pure Python with numerical stability
     N = g.shape[0]
-    g_inv = torch.linalg.inv(g)
+    
+    # Regularize metric to avoid singularities
+    epsilon = 1e-10
+    g_reg = g + epsilon * torch.eye(4, dtype=g.dtype, device=g.device).unsqueeze(0)
+    
+    # Compute inverse with SVD for stability
+    try:
+        g_inv = torch.linalg.inv(g_reg)
+    except RuntimeError:
+        # Fallback to pseudo-inverse if singular
+        g_inv = torch.linalg.pinv(g_reg)
+    
     combined = torch.zeros(N, 4, 4, 4, dtype=g.dtype, device=g.device)
     
     for sigma in range(4):
@@ -206,44 +217,6 @@ def compute_christoffel_symbols(g: torch.Tensor, dg: torch.Tensor) -> torch.Tens
         result = compute_christoffel_symbols_batch(g, dg)
         return result.squeeze(0)
     return compute_christoffel_symbols_batch(g, dg)
-    """
-    Compute Christoffel symbols for batch of particles.
-    
-    Γ^σ_{μν} = ½ g^{σρ} (∂_μ g_{ρν} + ∂_ν g_{ρμ} - ∂_ρ g_{μν})
-    
-    Args:
-        g: [N, 4, 4] metric tensors
-        dg: [N, 4, 4, 4] metric derivatives
-    Returns:
-        Gamma: [N, 4, 4, 4] Christoffel symbols
-    """
-    # Use C++ backend if available (fastest)
-    if CPP_AVAILABLE:
-        g_np = g.cpu().numpy()
-        dg_np = dg.cpu().numpy()
-        Gamma_np = geodesic_cpp.compute_christoffel_batch(g_np, dg_np)
-        return torch.from_numpy(Gamma_np).to(g.device)
-    
-    # Use Numba if available (fast)
-    if NUMBA_AVAILABLE:
-        g_np = g.cpu().numpy()
-        dg_np = dg.cpu().numpy()
-        Gamma_np = _compute_christoffel_numba(g_np, dg_np)
-        return torch.from_numpy(Gamma_np).to(g.device)
-    
-    # Fallback to pure Python (slow)
-    N = g.shape[0]
-    g_inv = torch.linalg.inv(g)
-    combined = torch.zeros(N, 4, 4, 4, dtype=g.dtype, device=g.device)
-    
-    for sigma in range(4):
-        for mu in range(4):
-            for nu in range(4):
-                for rho in range(4):
-                    combined[:, sigma, mu, nu] += g_inv[:, sigma, rho] * \
-                        (dg[:, mu, rho, nu] + dg[:, nu, rho, mu] - dg[:, rho, mu, nu])
-    
-    return 0.5 * combined
 
 
 # Numba-accelerated geodesic acceleration
