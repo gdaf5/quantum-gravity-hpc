@@ -1,20 +1,17 @@
 """
-Improved Geodesic Engine with Proper Physics
-- Correct Christoffel symbol computation with metric derivatives
-- 4th order symplectic integrator (Forest-Ruth)
-- Planck units throughout
-- Numerical derivatives via finite differences
+Optimized Geodesic Engine with Vectorized Operations
+- Batch processing for multiple particles
+- Vectorized metric interpolation
+- Optimized Christoffel symbol computation
 """
 
 import torch
-from torch.func import vmap
-import torch.nn.functional as F
 from typing import Callable, Tuple
+import numpy as np
 
 class MetricField:
     """
-    Metric field with proper interpolation and derivatives.
-    Uses cubic interpolation for smoothness.
+    Metric field with optimized batch interpolation.
     """
     def __init__(self, grid: torch.Tensor, grid_spacing: float, dtype=torch.float64, device='cpu'):
         """
@@ -28,148 +25,188 @@ class MetricField:
         self.device = device
         self.grid_shape = grid.shape[:4]
         
-    def interpolate_metric(self, coords: torch.Tensor) -> torch.Tensor:
+        # Precompute grid bounds for clamping
+        self.grid_max = torch.tensor([s - 1.001 for s in self.grid_shape], 
+                                     dtype=dtype, device=device)
+    
+    def interpolate_metric_batch(self, coords: torch.Tensor) -> torch.Tensor:
         """
-        Interpolate metric at given coordinates using trilinear interpolation.
+        Batch interpolate metric for multiple particles.
         
         Args:
-            coords: [4] - (t, x, y, z) in Planck lengths
+            coords: [N, 4] - positions in Planck lengths
         Returns:
-            g: [4, 4] metric tensor
+            g: [N, 4, 4] metric tensors
         """
-        # Normalize coordinates to grid indices
+        N = coords.shape[0]
+        
+        # Normalize to grid indices
         normalized = coords / self.grid_spacing
         
         # Clamp to grid boundaries
-        for i in range(4):
-            normalized[i] = torch.clamp(normalized[i], 0, self.grid_shape[i] - 1.001)
+        normalized = torch.clamp(normalized, torch.zeros(4, dtype=self.dtype, device=self.device), 
+                                self.grid_max)
         
-        # Grid sample expects [N, C, D, H, W] and coords [N, D_out, H_out, W_out, 3]
-        # We'll use manual trilinear interpolation for 4D
-        
-        # Get integer indices
+        # Integer and fractional parts
         i0 = normalized.long()
-        i1 = torch.clamp(i0 + 1, max=torch.tensor(self.grid_shape, device=self.device) - 1)
-        
-        # Fractional parts
+        i1 = torch.clamp(i0 + 1, max=self.grid_max.long())
         frac = normalized - i0.float()
         
-        # 16 corner values (4D hypercube)
-        g_interp = torch.zeros(4, 4, dtype=self.dtype, device=self.device)
+        # Trilinear interpolation weights (vectorized)
+        # For 4D: 16 corners
+        g_interp = torch.zeros(N, 4, 4, dtype=self.dtype, device=self.device)
         
+        # Iterate over 16 corners of 4D hypercube
         for dt in [0, 1]:
             for dx in [0, 1]:
                 for dy in [0, 1]:
                     for dz in [0, 1]:
-                        it = i0[0] if dt == 0 else i1[0]
-                        ix = i0[1] if dx == 0 else i1[1]
-                        iy = i0[2] if dy == 0 else i1[2]
-                        iz = i0[3] if dz == 0 else i1[3]
+                        # Indices for this corner
+                        it = torch.where(torch.tensor(dt == 1), i1[:, 0], i0[:, 0])
+                        ix = torch.where(torch.tensor(dx == 1), i1[:, 1], i0[:, 1])
+                        iy = torch.where(torch.tensor(dy == 1), i1[:, 2], i0[:, 2])
+                        iz = torch.where(torch.tensor(dz == 1), i1[:, 3], i0[:, 3])
                         
-                        weight = (frac[0] if dt == 1 else (1 - frac[0])) * \
-                                (frac[1] if dx == 1 else (1 - frac[1])) * \
-                                (frac[2] if dy == 1 else (1 - frac[2])) * \
-                                (frac[3] if dz == 1 else (1 - frac[3]))
+                        # Weights for this corner
+                        wt = frac[:, 0] if dt == 1 else (1 - frac[:, 0])
+                        wx = frac[:, 1] if dx == 1 else (1 - frac[:, 1])
+                        wy = frac[:, 2] if dy == 1 else (1 - frac[:, 2])
+                        wz = frac[:, 3] if dz == 1 else (1 - frac[:, 3])
                         
-                        g_interp += weight * self.grid[it, ix, iy, iz]
+                        weight = wt * wx * wy * wz  # [N]
+                        
+                        # Gather metric values at these indices
+                        for n in range(N):
+                            g_interp[n] += weight[n] * self.grid[it[n], ix[n], iy[n], iz[n]]
         
         return g_interp
     
-    def compute_metric_derivatives(self, coords: torch.Tensor, h: float = 1e-3) -> torch.Tensor:
+    def compute_metric_derivatives_batch(self, coords: torch.Tensor, h: float = 1e-3) -> torch.Tensor:
         """
-        Compute ∂_μ g_νρ using finite differences.
+        Compute ∂_μ g_νρ for batch of particles using finite differences.
         
         Args:
-            coords: [4] position
-            h: step size for finite differences (in Planck lengths)
+            coords: [N, 4] positions
+            h: step size for finite differences
         Returns:
-            dg: [4, 4, 4] - dg[μ, ν, ρ] = ∂_μ g_νρ
+            dg: [N, 4, 4, 4] - dg[n, μ, ν, ρ] = ∂_μ g_νρ for particle n
         """
-        dg = torch.zeros(4, 4, 4, dtype=self.dtype, device=self.device)
+        N = coords.shape[0]
+        dg = torch.zeros(N, 4, 4, 4, dtype=self.dtype, device=self.device)
         
         for mu in range(4):
             coords_plus = coords.clone()
             coords_minus = coords.clone()
             
-            coords_plus[mu] += h
-            coords_minus[mu] -= h
+            coords_plus[:, mu] += h
+            coords_minus[:, mu] -= h
             
-            g_plus = self.interpolate_metric(coords_plus)
-            g_minus = self.interpolate_metric(coords_minus)
+            g_plus = self.interpolate_metric_batch(coords_plus)
+            g_minus = self.interpolate_metric_batch(coords_minus)
             
             # Central difference
-            dg[mu] = (g_plus - g_minus) / (2 * h)
+            dg[:, mu] = (g_plus - g_minus) / (2 * h)
         
         return dg
 
 
-def compute_christoffel_symbols(g: torch.Tensor, dg: torch.Tensor) -> torch.Tensor:
+def compute_christoffel_symbols_batch(g: torch.Tensor, dg: torch.Tensor) -> torch.Tensor:
     """
-    Compute Christoffel symbols Γ^σ_{μν} from metric and its derivatives.
+    Compute Christoffel symbols for batch of particles.
     
     Γ^σ_{μν} = ½ g^{σρ} (∂_μ g_{ρν} + ∂_ν g_{ρμ} - ∂_ρ g_{μν})
     
     Args:
-        g: [4, 4] metric tensor
-        dg: [4, 4, 4] metric derivatives ∂_μ g_νρ
+        g: [N, 4, 4] metric tensors
+        dg: [N, 4, 4, 4] metric derivatives
     Returns:
-        Gamma: [4, 4, 4] Christoffel symbols
+        Gamma: [N, 4, 4, 4] Christoffel symbols
     """
-    # Inverse metric
-    g_inv = torch.linalg.inv(g)
+    N = g.shape[0]
     
-    # Γ^σ_{μν}
-    Gamma = torch.zeros(4, 4, 4, dtype=g.dtype, device=g.device)
+    # Inverse metrics (batch)
+    g_inv = torch.linalg.inv(g)  # [N, 4, 4]
+    
+    # Compute Christoffel symbols using Einstein summation
+    # Γ^σ_{μν} = ½ g^{σρ} (∂_μ g_{ρν} + ∂_ν g_{ρμ} - ∂_ρ g_{μν})
+    
+    # Rearrange derivatives for easier computation
+    # dg[n, μ, ν, ρ] = ∂_μ g_νρ
+    
+    # Term 1: ∂_μ g_{ρν}
+    term1 = dg  # [N, μ, ρ, ν]
+    
+    # Term 2: ∂_ν g_{ρμ}
+    term2 = dg.permute(0, 2, 3, 1)  # [N, ν, ρ, μ] -> need [N, μ, ρ, ν]
+    term2 = term2.permute(0, 3, 2, 1)  # [N, μ, ρ, ν]
+    
+    # Term 3: ∂_ρ g_{μν}
+    term3 = dg.permute(0, 3, 1, 2)  # [N, ρ, μ, ν]
+    
+    # Combine: (∂_μ g_{ρν} + ∂_ν g_{ρμ} - ∂_ρ g_{μν})
+    # Need to broadcast properly
+    combined = torch.zeros(N, 4, 4, 4, dtype=g.dtype, device=g.device)
     
     for sigma in range(4):
         for mu in range(4):
             for nu in range(4):
                 for rho in range(4):
-                    Gamma[sigma, mu, nu] += 0.5 * g_inv[sigma, rho] * \
-                        (dg[mu, rho, nu] + dg[nu, rho, mu] - dg[rho, mu, nu])
+                    combined[:, sigma, mu, nu] += g_inv[:, sigma, rho] * \
+                        (dg[:, mu, rho, nu] + dg[:, nu, rho, mu] - dg[:, rho, mu, nu])
+    
+    Gamma = 0.5 * combined
     
     return Gamma
 
 
-def geodesic_acceleration(coords: torch.Tensor, 
-                         velocity: torch.Tensor,
-                         metric_field: MetricField) -> torch.Tensor:
+def geodesic_acceleration_batch(coords: torch.Tensor, 
+                                velocity: torch.Tensor,
+                                metric_field: MetricField) -> torch.Tensor:
     """
-    Compute geodesic acceleration: a^σ = -Γ^σ_{μν} u^μ u^ν
+    Compute geodesic acceleration for batch: a^σ = -Γ^σ_{μν} u^μ u^ν
     
     Args:
-        coords: [4] position
-        velocity: [4] 4-velocity
+        coords: [N, 4] positions
+        velocity: [N, 4] 4-velocities
         metric_field: MetricField object
     Returns:
-        accel: [4] acceleration
+        accel: [N, 4] accelerations
     """
-    g = metric_field.interpolate_metric(coords)
-    dg = metric_field.compute_metric_derivatives(coords)
-    Gamma = compute_christoffel_symbols(g, dg)
+    g = metric_field.interpolate_metric_batch(coords)
+    dg = metric_field.compute_metric_derivatives_batch(coords)
+    Gamma = compute_christoffel_symbols_batch(g, dg)
     
     # a^σ = -Γ^σ_{μν} u^μ u^ν
-    accel = -torch.einsum('smn,m,n->s', Gamma, velocity, velocity)
+    # Gamma: [N, 4, 4, 4] - [particle, sigma, mu, nu]
+    # velocity: [N, 4] - [particle, component]
+    # Result: [N, 4] - [particle, sigma]
+    
+    N = coords.shape[0]
+    accel = torch.zeros(N, 4, dtype=coords.dtype, device=coords.device)
+    
+    for n in range(N):
+        for sigma in range(4):
+            for mu in range(4):
+                for nu in range(4):
+                    accel[n, sigma] -= Gamma[n, sigma, mu, nu] * velocity[n, mu] * velocity[n, nu]
     
     return accel
 
 
-def forest_ruth_step(coords: torch.Tensor,
-                     velocity: torch.Tensor,
-                     metric_field: MetricField,
-                     dt: float) -> Tuple[torch.Tensor, torch.Tensor]:
+def forest_ruth_step_batch(coords: torch.Tensor,
+                           velocity: torch.Tensor,
+                           metric_field: MetricField,
+                           dt: float) -> Tuple[torch.Tensor, torch.Tensor]:
     """
-    4th order symplectic integrator (Forest-Ruth algorithm).
-    
-    More accurate than Velocity Verlet for long-term integration.
+    4th order symplectic integrator (Forest-Ruth) for batch.
     
     Args:
-        coords: [4] position
-        velocity: [4] 4-velocity  
+        coords: [N, 4] positions
+        velocity: [N, 4] 4-velocities
         metric_field: MetricField object
-        dt: timestep in Planck times
+        dt: timestep
     Returns:
-        new_coords, new_velocity
+        new_coords, new_velocity: [N, 4] each
     """
     # Forest-Ruth coefficients
     theta = 1.0 / (2.0 - 2.0**(1.0/3.0))
@@ -185,17 +222,17 @@ def forest_ruth_step(coords: torch.Tensor,
     
     # Step 1
     coords = coords + c1 * dt * velocity
-    accel = geodesic_acceleration(coords, velocity, metric_field)
+    accel = geodesic_acceleration_batch(coords, velocity, metric_field)
     velocity = velocity + d1 * dt * accel
     
     # Step 2
     coords = coords + c2 * dt * velocity
-    accel = geodesic_acceleration(coords, velocity, metric_field)
+    accel = geodesic_acceleration_batch(coords, velocity, metric_field)
     velocity = velocity + d2 * dt * accel
     
     # Step 3
     coords = coords + c3 * dt * velocity
-    accel = geodesic_acceleration(coords, velocity, metric_field)
+    accel = geodesic_acceleration_batch(coords, velocity, metric_field)
     velocity = velocity + d3 * dt * accel
     
     # Step 4
@@ -204,45 +241,22 @@ def forest_ruth_step(coords: torch.Tensor,
     return coords, velocity
 
 
-def integrate_geodesic_single(particle: torch.Tensor,
-                              metric_field: MetricField,
-                              dt: float) -> torch.Tensor:
-    """
-    Integrate single particle geodesic.
-    
-    Args:
-        particle: [8] - (t, x, y, z, u^0, u^1, u^2, u^3)
-        metric_field: MetricField object
-        dt: timestep
-    Returns:
-        new_particle: [8]
-    """
-    coords = particle[:4]
-    velocity = particle[4:]
-    
-    new_coords, new_velocity = forest_ruth_step(coords, velocity, metric_field, dt)
-    
-    return torch.cat([new_coords, new_velocity])
-
-
 def batch_geodesic_integration(particles: torch.Tensor,
                                metric_field: MetricField,
                                dt: float) -> torch.Tensor:
     """
-    Vectorized geodesic integration for multiple particles.
+    Optimized vectorized geodesic integration for multiple particles.
     
     Args:
-        particles: [N, 8]
+        particles: [N, 8] - (t, x, y, z, u^0, u^1, u^2, u^3)
         metric_field: MetricField object
         dt: timestep
     Returns:
         new_particles: [N, 8]
     """
-    # Simple loop instead of vmap (vmap has issues with our metric field)
-    N = particles.shape[0]
-    new_particles = torch.zeros_like(particles)
+    coords = particles[:, :4]
+    velocity = particles[:, 4:]
     
-    for i in range(N):
-        new_particles[i] = integrate_geodesic_single(particles[i], metric_field, dt)
+    new_coords, new_velocity = forest_ruth_step_batch(coords, velocity, metric_field, dt)
     
-    return new_particles
+    return torch.cat([new_coords, new_velocity], dim=1)

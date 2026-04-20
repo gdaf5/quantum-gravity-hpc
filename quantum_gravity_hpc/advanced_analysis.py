@@ -64,7 +64,7 @@ class QuantumGravityAnalyzer:
         dispersion = np.mean((velocities - mean_vel)**2, axis=1)
         return dispersion  # [steps, 3]
     
-    def compute_fractal_dimension(self, step=-1, eps_min=1e-3, eps_max=10.0, n_eps=20):
+    def compute_fractal_dimension(self, step=-1, eps_min=None, eps_max=None, n_eps=20):
         """
         Корреляционная размерность D₂ для фазового облака.
         D₂ = d(log C(ε)) / d(log ε)
@@ -73,6 +73,17 @@ class QuantumGravityAnalyzer:
         
         # Парные расстояния
         distances = pdist(positions)
+        
+        # Auto-determine eps range from actual distances
+        if eps_min is None:
+            eps_min = distances.min() * 0.5
+        if eps_max is None:
+            eps_max = distances.max() * 0.5
+        
+        # Make sure we have valid range
+        if eps_min >= eps_max or eps_min <= 0:
+            print(f"  [WARNING] Invalid eps range: [{eps_min}, {eps_max}]")
+            return 0.0, 0.0, (np.array([]), np.array([]))
         
         eps_range = np.logspace(np.log10(eps_min), np.log10(eps_max), n_eps)
         correlation_sum = []
@@ -87,16 +98,30 @@ class QuantumGravityAnalyzer:
         log_eps = np.log10(eps_range)
         log_C = np.log10(correlation_sum)
         
-        # Используем среднюю часть для фитинга
+        # Используем среднюю часть для фитинга (более узкий диапазон)
         mid_start = n_eps // 4
         mid_end = 3 * n_eps // 4
         
-        slope, intercept, r_value, _, _ = linregress(
-            log_eps[mid_start:mid_end], 
-            log_C[mid_start:mid_end]
-        )
+        # Check if we have enough points
+        if mid_end <= mid_start or (mid_end - mid_start) < 3:
+            print(f"  [WARNING] Not enough points for fit")
+            return 0.0, 0.0, (eps_range, correlation_sum)
         
-        return slope, r_value**2, (eps_range, correlation_sum)
+        try:
+            slope, intercept, r_value, _, _ = linregress(
+                log_eps[mid_start:mid_end], 
+                log_C[mid_start:mid_end]
+            )
+            
+            # Validate result
+            if slope < 0 or slope > 10:
+                print(f"  [WARNING] Unrealistic D2 = {slope:.2f}, setting to 0")
+                return 0.0, 0.0, (eps_range, correlation_sum)
+            
+            return slope, r_value**2, (eps_range, correlation_sum)
+        except Exception as e:
+            print(f"  [ERROR] Failed to compute D2: {e}")
+            return 0.0, 0.0, (eps_range, correlation_sum)
     
     def compute_energy_conservation(self):
         """Проверка сохранения энергии (для диагностики)"""
