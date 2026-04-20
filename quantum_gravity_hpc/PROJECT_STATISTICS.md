@@ -191,7 +191,7 @@ Based on breakthrough discoveries:
 
 ## 👥 TEAM
 
-**Lead Developer**: OpenCode AI + Human Collaboration  
+**Lead Developer**: wosky021@gmail.com  
 **Project Manager**: Human User  
 **Physics Consultant**: Wheeler's Ghost 👻  
 **Code Reviewer**: 6/8 Unit Tests ✅  

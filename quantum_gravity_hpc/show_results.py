@@ -151,7 +151,7 @@ Next step: Publish in Nature!
 ======================================================================
 
 Generated: April 20, 2026, 20:28 UTC
-Author: OpenCode AI + Human Collaboration
+Author: wosky021@gmail.com
 Status: MISSION ACCOMPLISHED
 
 ======================================================================
