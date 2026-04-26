@@ -169,18 +169,18 @@ def compute_christoffel_symbols_batch(g: torch.Tensor, dg: torch.Tensor) -> torc
         Gamma: [N, 4, 4, 4] Christoffel symbols
     """
     # Use C++ backend if available (fastest)
-    if CPP_AVAILABLE:
-        g_np = g.cpu().numpy()
-        dg_np = dg.cpu().numpy()
-        Gamma_np = geodesic_cpp.compute_christoffel_batch(g_np, dg_np)
-        return torch.from_numpy(Gamma_np).to(g.device)
-    
-    # Use Numba if available (fast)
-    if NUMBA_AVAILABLE:
-        g_np = g.cpu().numpy()
-        dg_np = dg.cpu().numpy()
-        Gamma_np = _compute_christoffel_numba(g_np, dg_np)
-        return torch.from_numpy(Gamma_np).to(g.device)
+    # if CPP_AVAILABLE:
+    #     g_np = g.cpu().numpy()
+    #     dg_np = dg.cpu().numpy()
+    #     Gamma_np = geodesic_cpp.compute_christoffel_batch(g_np, dg_np)
+    #     return torch.from_numpy(Gamma_np).to(g.device)
+    #
+    # # Use Numba if available (fast)
+    # if NUMBA_AVAILABLE:
+    #     g_np = g.cpu().numpy()
+    #     dg_np = dg.cpu().numpy()
+    #     Gamma_np = _compute_christoffel_numba(g_np, dg_np)
+    #     return torch.from_numpy(Gamma_np).to(g.device)
     
     # Fallback to pure Python with numerical stability
     N = g.shape[0]
@@ -249,6 +249,15 @@ def geodesic_acceleration(coords: torch.Tensor,
     return geodesic_acceleration_batch(coords, velocity, metric_field)
 
 
+    def normalize_four_velocity(self, coords: torch.Tensor, velocity: torch.Tensor) -> torch.Tensor:
+        """
+        Normalize 4-velocity such that g_μν u^μ u^ν = -1.
+        """
+        g = self.interpolate_metric_batch(coords)
+        norm_sq = (velocity * torch.matmul(g, velocity.unsqueeze(-1)).squeeze(-1)).sum(-1)
+        scale = torch.sqrt(torch.abs(norm_sq))
+        return velocity / scale.unsqueeze(-1)
+
 def geodesic_acceleration_batch(coords: torch.Tensor, 
                                 velocity: torch.Tensor,
                                 metric_field: MetricField) -> torch.Tensor:
@@ -271,17 +280,17 @@ def geodesic_acceleration_batch(coords: torch.Tensor,
         Gamma_np = Gamma.cpu().numpy()
         velocity_np = velocity.cpu().numpy()
         accel_np = _geodesic_acceleration_numba(Gamma_np, velocity_np)
-        return torch.from_numpy(accel_np).to(coords.device)
-    
-    # Fallback to Python
-    N = coords.shape[0]
-    accel = torch.zeros(N, 4, dtype=coords.dtype, device=coords.device)
-    
-    for n in range(N):
-        for sigma in range(4):
-            for mu in range(4):
-                for nu in range(4):
-                    accel[n, sigma] -= Gamma[n, sigma, mu, nu] * velocity[n, mu] * velocity[n, nu]
+        accel = torch.from_numpy(accel_np).to(coords.device)
+    else:
+        # Fallback to Python
+        N = coords.shape[0]
+        accel = torch.zeros(N, 4, dtype=coords.dtype, device=coords.device)
+        
+        for n in range(N):
+            for sigma in range(4):
+                for mu in range(4):
+                    for nu in range(4):
+                        accel[n, sigma] -= Gamma[n, sigma, mu, nu] * velocity[n, mu] * velocity[n, nu]
     
     return accel
 
@@ -315,21 +324,29 @@ def forest_ruth_step_batch(coords: torch.Tensor,
     
     # Step 1
     coords = coords + c1 * dt * velocity
+    # Normalize velocity at each step
+    velocity = metric_field.normalize_four_velocity(coords, velocity)
     accel = geodesic_acceleration_batch(coords, velocity, metric_field)
     velocity = velocity + d1 * dt * accel
     
     # Step 2
     coords = coords + c2 * dt * velocity
+    # Normalize velocity at each step
+    velocity = metric_field.normalize_four_velocity(coords, velocity)
     accel = geodesic_acceleration_batch(coords, velocity, metric_field)
     velocity = velocity + d2 * dt * accel
     
     # Step 3
     coords = coords + c3 * dt * velocity
+    # Normalize velocity at each step
+    velocity = metric_field.normalize_four_velocity(coords, velocity)
     accel = geodesic_acceleration_batch(coords, velocity, metric_field)
     velocity = velocity + d3 * dt * accel
     
     # Step 4
     coords = coords + c4 * dt * velocity
+    # Normalize velocity at each step
+    velocity = metric_field.normalize_four_velocity(coords, velocity)
     
     return coords, velocity
 

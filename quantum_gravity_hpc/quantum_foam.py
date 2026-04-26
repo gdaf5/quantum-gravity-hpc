@@ -57,7 +57,8 @@ class QuantumFoam:
                  softening_length: float = 0.1,  # ε in Planck lengths
                  enable_hawking_evaporation: bool = True,
                  dtype=torch.float64,
-                 device='cpu'):
+                 device='cpu',
+                 random_seed: Optional[int] = None):
         
         self.grid_shape = grid_shape
         self.grid_spacing = grid_spacing
@@ -68,6 +69,10 @@ class QuantumFoam:
         self.enable_hawking = enable_hawking_evaporation
         self.dtype = dtype
         self.device = device
+        
+        # Random number generator (for reproducibility and Lyapunov analysis)
+        self.rng = np.random.RandomState(random_seed)
+        self.random_seed = random_seed
         
         # Virtual particle registry
         self.virtual_particles: List[VirtualParticle] = []
@@ -99,6 +104,49 @@ class QuantumFoam:
         print(f"Hawking evaporation: {'Enabled' if self.enable_hawking else 'Disabled'}")
         print("="*70)
     
+    def generate_gaussian_random_field(self, shape: Tuple[int, ...], power: float = 2.0) -> torch.Tensor:
+        """
+        Generate Gaussian Random Field (GRF) for more physical metric fluctuations.
+        P(k) ~ k^(-power)
+        """
+        # Frequency grid
+        dims = len(shape)
+        freqs = [torch.fft.fftfreq(n, dtype=self.dtype, device=self.device) for n in shape]
+        mesh = torch.meshgrid(*freqs, indexing='ij')
+        
+        # Distance from origin in k-space
+        k_sq = sum(m**2 for m in mesh)
+        k_sq[0, 0, 0, 0] = 1e-10 # avoid div by zero
+        
+        # Power spectrum
+        pk = k_sq**(-power / 2.0)
+        
+        # Random complex coefficients
+        noise = torch.randn(shape, dtype=torch.complex128, device=self.device)
+        
+        # Filter noise
+        field_fft = noise * torch.sqrt(pk)
+        
+        # Inverse FFT
+        field = torch.real(torch.fft.ifftn(field_fft))
+        
+        # Normalize
+        field = (field - field.mean()) / field.std()
+        return field
+
+    def add_physical_fluctuations(self, g_minkowski: torch.Tensor, amplitude: float = 0.1) -> torch.Tensor:
+        """
+        Replace naive random noise with GRF-based physical fluctuations.
+        """
+        shape = g_minkowski.shape[:4]
+        
+        # Generate fluctuations for each component (or apply to the trace)
+        # Using 4D GRF
+        fluctuations = self.generate_gaussian_random_field(shape, power=3.0)
+        
+        # Apply to metric
+        return g_minkowski + fluctuations.unsqueeze(-1).unsqueeze(-1) * amplitude
+    
     def compute_local_energy_density(self, 
                                     position: torch.Tensor,
                                     metric_field) -> float:
@@ -127,11 +175,11 @@ class QuantumFoam:
         rho = torch.sum(delta_g**2).item()
         
         return rho
-    
+
     def should_create_particle(self, 
-                              position: torch.Tensor,
-                              metric_field,
-                              dt: float) -> bool:
+                               position: torch.Tensor,
+                               metric_field,
+                               dt: float) -> bool:
         """
         Stochastic decision: should we create a virtual particle here?
         
@@ -153,8 +201,9 @@ class QuantumFoam:
         # Creation probability
         prob = (rho / self.planck_density_threshold) * self.creation_rate * dt * dV
         
-        # Stochastic decision
-        return np.random.random() < prob
+        # Stochastic decision (using instance RNG for reproducibility)
+        return self.rng.random() < prob
+
     
     def create_virtual_particle(self, 
                                position: torch.Tensor,
@@ -172,7 +221,7 @@ class QuantumFoam:
             VirtualParticle
         """
         # Random mass around Planck mass (log-normal distribution)
-        log_mass = np.random.normal(0.0, 0.5)  # mean=0, std=0.5
+        log_mass = self.rng.normal(0.0, 0.5)  # mean=0, std=0.5
         mass = np.exp(log_mass)  # m ~ 0.6 to 1.6 m_P typically
         
         # Lifetime from uncertainty principle: Δt ~ ℏ/ΔE ~ 1/m
@@ -286,23 +335,173 @@ class QuantumFoam:
         
         return dM
     
+    def compute_vacuum_polarization_pressure(self, 
+                                            position: torch.Tensor,
+                                            metric_field) -> float:
+        """
+        Compute quantum vacuum polarization pressure (противодействие сжатию).
+        
+        На малых масштабах вакуум создает "эффект пружины":
+        P_vac ~ ρ_vac ~ (ℏc/L⁴) в планковских единицах
+        
+        Это предотвращает полное схлопывание пространства.
+        
+        Args:
+            position: [4] coordinates
+            metric_field: MetricField object
+        Returns:
+            P_vac: vacuum pressure (positive = repulsive)
+        """
+        # Вычисляем локальную кривизну
+        g = metric_field.interpolate_metric(position)
+        
+        # Ricci scalar (упрощенная оценка через след метрики)
+        g_trace = torch.trace(g).item()
+        
+        # Vacuum energy density: ρ_vac ~ R (пропорционально кривизне)
+        # На планковских масштабах: ρ_vac ~ 1/L⁴
+        rho_vac = abs(g_trace - 2.0)  # отклонение от плоского пространства
+        
+        # Vacuum pressure (уравнение состояния: P = -ρ для космологической константы)
+        # Но для квантовых флуктуаций: P = +ρ/3 (radiation-like)
+        P_vac = rho_vac / 3.0
+        
+        return P_vac
+    
+    def compute_casimir_force(self, 
+                             particle1: VirtualParticle,
+                             particle2: VirtualParticle) -> float:
+        """
+        Compute Casimir force between two particles (квантовая сила отталкивания).
+        
+        F_Casimir = -π²ℏc/(240 r⁴) в обычных единицах
+        В планковских единицах: F ~ -1/r⁴
+        
+        Отрицательная сила = притяжение на больших расстояниях
+        Положительная сила = отталкивание на малых расстояниях (регуляризация)
+        
+        Args:
+            particle1, particle2: VirtualParticle objects
+        Returns:
+            F: Casimir force magnitude (positive = repulsive)
+        """
+        # Distance
+        dr = particle1.position[1:] - particle2.position[1:]
+        r = torch.sqrt(torch.sum(dr**2)).item()
+        
+        # Regularization
+        r_reg = max(r, self.softening_length)
+        
+        # Casimir force (упрощенная модель)
+        # На r < l_P: отталкивание (предотвращает коллапс)
+        # На r > l_P: притяжение (стандартный эффект Казимира)
+        if r < 1.0:  # sub-Planckian
+            # Repulsive quantum pressure
+            F_casimir = 1.0 / r_reg**4
+        else:
+            # Attractive Casimir effect
+            F_casimir = -1.0 / r_reg**4
+        
+        return F_casimir
+    
+    def compute_quantum_stress_energy_tensor(self, 
+                                            position: torch.Tensor,
+                                            metric_field) -> torch.Tensor:
+        """
+        Compute quantum vacuum stress-energy tensor.
+        
+        T^μν_vac = <T^μν> включает:
+        1. Vacuum energy density: T^00 = ρ_vac
+        2. Vacuum pressure: T^ii = -P_vac (изотропное давление)
+        3. Поляризация вакуума
+        
+        Args:
+            position: [4] coordinates
+            metric_field: MetricField object
+        Returns:
+            T_vac: [4, 4] stress-energy tensor
+        """
+        # Vacuum pressure
+        P_vac = self.compute_vacuum_polarization_pressure(position, metric_field)
+        
+        # Stress-energy tensor (diagonal, изотропный)
+        T_vac = torch.zeros(4, 4, dtype=self.dtype, device=self.device)
+        
+        # Energy density (T^00)
+        T_vac[0, 0] = P_vac
+        
+        # Pressure (T^ii = -P для космологической константы)
+        # Но для квантовых флуктуаций: T^ii = +P/3
+        for i in range(1, 4):
+            T_vac[i, i] = P_vac / 3.0
+        
+        return T_vac
+    
+    def apply_quantum_pressure_force(self, 
+                                    particle: VirtualParticle,
+                                    metric_field,
+                                    dt: float) -> torch.Tensor:
+        """
+        Apply quantum pressure force to particle (противодействие коллапсу).
+        
+        F_quantum = -∇P_vac
+        
+        Это создает "эффект пружины" на малых масштабах.
+        
+        Args:
+            particle: VirtualParticle
+            metric_field: MetricField object
+            dt: time step
+        Returns:
+            dv: velocity change [3] (spatial)
+        """
+        # Compute pressure gradient (finite differences)
+        h = 0.1 * self.grid_spacing
+        
+        grad_P = torch.zeros(3, dtype=self.dtype, device=self.device)
+        
+        for i in range(3):
+            pos_plus = particle.position.clone()
+            pos_minus = particle.position.clone()
+            pos_plus[i+1] += h
+            pos_minus[i+1] -= h
+            
+            P_plus = self.compute_vacuum_polarization_pressure(pos_plus, metric_field)
+            P_minus = self.compute_vacuum_polarization_pressure(pos_minus, metric_field)
+            
+            grad_P[i] = (P_plus - P_minus) / (2 * h)
+        
+        # Force: F = -∇P (pressure gradient)
+        F_quantum = -grad_P
+        
+        # Acceleration: a = F/m
+        a_quantum = F_quantum / particle.mass
+        
+        # Velocity change
+        dv = a_quantum * dt
+        
+        return dv
+    
     def evolve_foam(self, 
                    metric_field,
                    current_time: float,
-                   dt: float) -> Dict:
+                   dt: float,
+                   enable_quantum_pressure: bool = True) -> Dict:
         """
-        Evolve quantum foam for one time step.
+        Evolve quantum foam for one time step with QUANTUM PRESSURE.
         
         Steps:
         1. Stochastic particle creation
-        2. Check collapse conditions
-        3. Hawking evaporation
-        4. Remove expired particles
+        2. Check collapse conditions (with Casimir force)
+        3. Apply quantum pressure (противодействие коллапсу)
+        4. Hawking evaporation
+        5. Remove expired particles
         
         Args:
             metric_field: MetricField object
             current_time: current simulation time
             dt: time step
+            enable_quantum_pressure: enable vacuum polarization pressure
         Returns:
             dict with evolution statistics
         """
@@ -316,10 +515,10 @@ class QuantumFoam:
         
         for _ in range(n_samples):
             # Random position in grid
-            t_idx = np.random.randint(0, self.grid_shape[0])
-            x_idx = np.random.randint(0, self.grid_shape[1])
-            y_idx = np.random.randint(0, self.grid_shape[2])
-            z_idx = np.random.randint(0, self.grid_shape[3])
+            t_idx = self.rng.randint(0, self.grid_shape[0])
+            x_idx = self.rng.randint(0, self.grid_shape[1])
+            y_idx = self.rng.randint(0, self.grid_shape[2])
+            z_idx = self.rng.randint(0, self.grid_shape[3])
             
             # Convert to physical coordinates
             position = torch.tensor([
@@ -346,12 +545,17 @@ class QuantumFoam:
                 if p1 in particles_to_remove or p2 in particles_to_remove:
                     continue
                 
-                # Check collapse
+                # Check collapse (with Casimir force modification)
                 if self.check_collapse_condition(p1, p2):
-                    singularity = self.collapse_to_singularity(p1, p2)
-                    singularities_to_add.append(singularity)
-                    particles_to_remove.extend([p1, p2])
-                    collapsed_count += 1
+                    # Compute Casimir force (может предотвратить коллапс)
+                    F_casimir = self.compute_casimir_force(p1, p2)
+                    
+                    # If repulsive Casimir force is strong, prevent collapse
+                    if F_casimir < 0.5:  # threshold for collapse prevention
+                        singularity = self.collapse_to_singularity(p1, p2)
+                        singularities_to_add.append(singularity)
+                        particles_to_remove.extend([p1, p2])
+                        collapsed_count += 1
         
         # Remove collapsed particles
         for p in particles_to_remove:
@@ -363,7 +567,16 @@ class QuantumFoam:
         self.virtual_particles.extend(singularities_to_add)
         self.stats['current_particles'] += len(singularities_to_add)
         
-        # 3. Hawking evaporation
+        # 3. Apply quantum pressure (противодействие коллапсу)
+        if enable_quantum_pressure:
+            for particle in self.virtual_particles:
+                if not particle.is_singularity:  # Only for regular particles
+                    # Quantum pressure creates "spring effect"
+                    dv = self.apply_quantum_pressure_force(particle, metric_field, dt)
+                    # Update position (simplified: assume velocity ~ dv)
+                    particle.position[1:] += dv * dt
+        
+        # 4. Hawking evaporation
         if self.enable_hawking:
             for particle in self.virtual_particles:
                 if particle.is_singularity:
@@ -373,7 +586,7 @@ class QuantumFoam:
                     # Update Schwarzschild radius
                     particle.schwarzschild_radius = 2.0 * particle.mass
         
-        # 4. Remove expired particles
+        # 5. Remove expired particles
         expired = []
         for particle in self.virtual_particles:
             age = current_time - particle.birth_time
@@ -471,6 +684,8 @@ def demonstrate_quantum_foam():
     
     # Minkowski metric
     g_minkowski = torch.zeros((*grid_shape, 4, 4), dtype=torch.float64)
+    # Minkowski metric
+    g_minkowski = torch.zeros((*grid_shape, 4, 4), dtype=torch.float64)
     for it in range(grid_shape[0]):
         for ix in range(grid_shape[1]):
             for iy in range(grid_shape[2]):
@@ -479,13 +694,7 @@ def demonstrate_quantum_foam():
                         torch.tensor([-1.0, 1.0, 1.0, 1.0], dtype=torch.float64)
                     )
     
-    # Add small random fluctuations (quantum foam!)
-    fluctuation_amplitude = 0.1
-    g_minkowski += torch.randn_like(g_minkowski) * fluctuation_amplitude
-    
-    metric_field = MetricField(g_minkowski, grid_spacing)
-    
-    # Create quantum foam
+    # Create quantum foam instance
     foam = QuantumFoam(
         grid_shape=grid_shape,
         grid_spacing=grid_spacing,
@@ -494,6 +703,12 @@ def demonstrate_quantum_foam():
         softening_length=0.1,
         enable_hawking_evaporation=True
     )
+    
+    # Add physical fluctuations using GRF
+    fluctuation_amplitude = 0.1
+    g_minkowski = foam.add_physical_fluctuations(g_minkowski, amplitude=fluctuation_amplitude)
+    
+    metric_field = MetricField(g_minkowski, grid_spacing)
     
     # Evolve foam
     dt = 0.1  # Planck times
